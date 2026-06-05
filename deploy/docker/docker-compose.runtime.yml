@@ -1,0 +1,118 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    restart: always
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    mem_limit: 256m
+    cpus: "0.50"
+
+  timescaledb:
+    image: timescale/timescaledb:2.15.3-pg16
+    restart: always
+    environment:
+      POSTGRES_DB: binance_market
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d binance_market"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 1024m
+    cpus: "1.00"
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      CP_REDIS_URL: redis://redis:6379/0
+      CP_POSTGRES_DSN: postgresql://postgres:postgres@timescaledb:5432/binance_market
+      CP_LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    mem_limit: 768m
+    cpus: "1.00"
+
+  ingestor:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.workers.binance_ingestor"]
+    restart: always
+    environment:
+      CP_REDIS_URL: redis://redis:6379/0
+      CP_LOG_LEVEL: INFO
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: "1.00"
+
+  data_saver:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.workers.data_saver"]
+    restart: always
+    environment:
+      CP_REDIS_URL: redis://redis:6379/0
+      CP_POSTGRES_DSN: postgresql://postgres:postgres@timescaledb:5432/binance_market
+      CP_LOG_LEVEL: INFO
+    depends_on:
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: "1.00"
+
+  gap_fill:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.workers.gap_fill_worker"]
+    restart: always
+    environment:
+      CP_REDIS_URL: redis://redis:6379/0
+      CP_POSTGRES_DSN: postgresql://postgres:postgres@timescaledb:5432/binance_market
+      CP_LOG_LEVEL: INFO
+    depends_on:
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: "1.00"
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    restart: always
+    volumes:
+      - ../../ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../ops/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 256m
+    cpus: "0.50"

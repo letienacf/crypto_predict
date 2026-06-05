@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "system.gap_detected.v1",
+  "title": "SystemGapDetectedV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_type",
+    "event_version",
+    "symbol",
+    "interval",
+    "from_ts",
+    "to_ts",
+    "detected_at"
+  ],
+  "properties": {
+    "event_type": { "const": "system.gap_detected" },
+    "event_version": { "const": 1 },
+    "symbol": { "type": "string", "pattern": "^[a-z0-9]{3,20}$" },
+    "interval": { "type": "string", "enum": ["1m", "5m", "15m", "1h", "4h", "1d", "1w"] },
+    "from_ts": { "type": "string", "format": "date-time" },
+    "to_ts": { "type": "string", "format": "date-time" },
+    "detected_at": { "type": "string", "format": "date-time" }
+  }
+}

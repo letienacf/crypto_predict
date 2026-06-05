@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "trade.tick.v1",
+  "title": "TradeTickV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_type",
+    "event_version",
+    "exchange",
+    "symbol",
+    "price",
+    "quantity",
+    "trade_time",
+    "ingested_at"
+  ],
+  "properties": {
+    "event_type": { "const": "trade.tick" },
+    "event_version": { "const": 1 },
+    "exchange": { "type": "string", "enum": ["binance"] },
+    "symbol": { "type": "string", "pattern": "^[a-z0-9]{3,20}$" },
+    "price": { "type": "number", "exclusiveMinimum": 0 },
+    "quantity": { "type": "number", "exclusiveMinimum": 0 },
+    "trade_time": { "type": "string", "format": "date-time" },
+    "ingested_at": { "type": "string", "format": "date-time" }
+  }
+}

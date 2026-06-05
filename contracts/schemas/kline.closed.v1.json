@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kline.closed.v1",
+  "title": "KlineClosedV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_type",
+    "event_version",
+    "exchange",
+    "symbol",
+    "interval",
+    "open_time",
+    "close_time",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "is_closed",
+    "ingested_at"
+  ],
+  "properties": {
+    "event_type": { "const": "kline.closed" },
+    "event_version": { "const": 1 },
+    "exchange": { "type": "string", "enum": ["binance"] },
+    "symbol": { "type": "string", "pattern": "^[a-z0-9]{3,20}$" },
+    "interval": { "type": "string", "enum": ["1m", "5m", "15m", "1h", "4h", "1d", "1w"] },
+    "open_time": { "type": "string", "format": "date-time" },
+    "close_time": { "type": "string", "format": "date-time" },
+    "open": { "type": "number", "exclusiveMinimum": 0 },
+    "high": { "type": "number", "exclusiveMinimum": 0 },
+    "low": { "type": "number", "exclusiveMinimum": 0 },
+    "close": { "type": "number", "exclusiveMinimum": 0 },
+    "volume": { "type": "number", "minimum": 0 },
+    "is_closed": { "const": true },
+    "ingested_at": { "type": "string", "format": "date-time" }
+  }
+}

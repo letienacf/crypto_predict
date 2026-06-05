@@ -1,0 +1,47 @@
+groups:
+  - name: realtime_system_alerts
+    rules:
+      - alert: BackendHighErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(http_requests_total[5m])), 1) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Backend 5xx error rate is above 5%
+          description: The backend API error ratio has been above threshold for 5 minutes.
+
+      - alert: IngestorReconnectSpike
+        expr: increase(ingestor_reconnect_total[10m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Binance ingestor reconnect spike
+          description: Reconnect attempts exceeded expected baseline in the last 10 minutes.
+
+      - alert: WebsocketLatencyP95TooHigh
+        expr: histogram_quantile(0.95, sum(rate(ws_broadcast_latency_seconds_bucket[5m])) by (le)) > 0.3
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: WebSocket broadcast latency p95 exceeds 300ms
+          description: Broadcast latency is above SLO target for more than 3 minutes.
+
+      - alert: GapFillFailing
+        expr: increase(gap_fill_failures_total[10m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Gap fill worker failure detected
+          description: Gap fill worker encountered one or more failures in the last 10 minutes.
+
+      - alert: MemoryUsageTooHigh
+        expr: process_resident_memory_bytes > 1.2e+09
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Process memory usage above 1.2GB
+          description: Memory usage stayed above threshold for 5 minutes.
