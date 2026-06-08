@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { fetchHistoricalKlines } from "../api/marketApi";
 import { MarketWsClient } from "../services/marketWsClient";
 import type { Interval } from "../types/market";
 
@@ -24,9 +25,52 @@ export function useWatchlistTicks({ symbols, interval }: UseWatchlistTicksParams
   const timersRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
+    let disposed = false;
+
     setRows(
       symbols.map((symbol) => ({ symbol: symbol.toLowerCase(), price: 0, direction: "none", flashing: false }))
     );
+
+    const hydrateFromRest = async (): Promise<void> => {
+      const snapshots = await Promise.all(
+        symbols.map(async (symbol) => {
+          try {
+            const response = await fetchHistoricalKlines(symbol, interval, 1);
+            const last = response.data[response.data.length - 1];
+            return { symbol: symbol.toLowerCase(), price: last?.close ?? 0 };
+          } catch {
+            return { symbol: symbol.toLowerCase(), price: 0 };
+          }
+        })
+      );
+
+      if (disposed) {
+        return;
+      }
+
+      setRows((current) =>
+        current.map((row) => {
+          const snapshot = snapshots.find((item) => item.symbol === row.symbol);
+          if (snapshot === undefined || snapshot.price <= 0) {
+            return row;
+          }
+
+          const direction: "up" | "down" | "none" =
+            row.price === 0 ? "none" : snapshot.price > row.price ? "up" : snapshot.price < row.price ? "down" : "none";
+
+          return {
+            ...row,
+            price: snapshot.price,
+            direction,
+          };
+        })
+      );
+    };
+
+    void hydrateFromRest();
+    const pollingTimer = window.setInterval(() => {
+      void hydrateFromRest();
+    }, 10000);
 
     wsClient.connect({ symbols, intervals: [interval] });
     wsClient.updateWatchlist(symbols, [interval]);
@@ -71,6 +115,9 @@ export function useWatchlistTicks({ symbols, interval }: UseWatchlistTicksParams
     });
 
     return () => {
+      disposed = true;
+      window.clearInterval(pollingTimer);
+
       for (const unsubscribe of unsubscribesRef.current) {
         unsubscribe();
       }

@@ -1,10 +1,11 @@
 import type { KlineItem } from "../types/market";
-import { useServerTime } from "../hooks/useServerTime";
 
 interface LiveCandleStatsProps {
   symbol: string;
   interval: string;
   latestCandle: KlineItem | null;
+  nowMs: number;
+  offsetMs: number;
 }
 
 function formatCountdown(totalSeconds: number): string {
@@ -14,30 +15,47 @@ function formatCountdown(totalSeconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(remainSeconds).padStart(2, "0")}`;
 }
 
-export function LiveCandleStats({ symbol, interval, latestCandle }: LiveCandleStatsProps): JSX.Element {
-  const { nowMs, offsetMs } = useServerTime();
-
+export function LiveCandleStats({ symbol, interval, latestCandle, nowMs, offsetMs }: LiveCandleStatsProps): JSX.Element {
   const closeMs = latestCandle === null ? 0 : new Date(latestCandle.timestamp).getTime();
   const countdownSec = closeMs > 0 ? Math.floor((closeMs - nowMs) / 1000) : 0;
 
   return (
-    <section style={{ background: "#111827", border: "1px solid #1F2937", borderRadius: 8, padding: 12 }}>
-      <h2 style={{ color: "#E5E7EB", marginTop: 0 }}>Live Candle Stats</h2>
-      <p style={{ color: "#9CA3AF", marginTop: 0 }}>
+    <section className="panel panel--stats">
+      <div className="panel__header">
+        <h2>Live Candle Stats</h2>
+        <span>Server sync</span>
+      </div>
+      <p className="panel__meta">
         {symbol.toUpperCase()} {interval} | Server offset: {offsetMs} ms
       </p>
 
       {latestCandle === null ? (
-        <p style={{ color: "#9CA3AF" }}>No active candle yet.</p>
+        <p className="panel__empty">No active candle yet.</p>
       ) : (
-        <div style={{ display: "grid", gap: 6, color: "#E5E7EB", fontVariantNumeric: "tabular-nums" }}>
-          <div>O: {latestCandle.open.toFixed(4)}</div>
-          <div>H: {latestCandle.high.toFixed(4)}</div>
-          <div>L: {latestCandle.low.toFixed(4)}</div>
-          <div>C: {latestCandle.close.toFixed(4)}</div>
-          <div>V: {latestCandle.volume.toFixed(4)}</div>
-          <div style={{ color: "#FCD535", fontWeight: 700 }}>
-            Countdown: {formatCountdown(countdownSec)}
+        <div className="stats-grid">
+          <div className="stats-item">
+            <span>Open</span>
+            <strong>{latestCandle.open.toFixed(4)}</strong>
+          </div>
+          <div className="stats-item">
+            <span>High</span>
+            <strong>{latestCandle.high.toFixed(4)}</strong>
+          </div>
+          <div className="stats-item">
+            <span>Low</span>
+            <strong>{latestCandle.low.toFixed(4)}</strong>
+          </div>
+          <div className="stats-item">
+            <span>Close</span>
+            <strong>{latestCandle.close.toFixed(4)}</strong>
+          </div>
+          <div className="stats-item stats-item--full">
+            <span>Volume</span>
+            <strong>{latestCandle.volume.toFixed(4)}</strong>
+          </div>
+          <div className="stats-item stats-item--full stats-item--countdown">
+            <span>Countdown</span>
+            <strong>{formatCountdown(countdownSec)}</strong>
           </div>
         </div>
       )}

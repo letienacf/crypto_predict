@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Crypto Trading UI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0b0e11; color: #EAECEF; margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .bg-panel { background-color: #1e2329; }
+        .border-panel { border-color: #2b3139; }
+        .text-up { color: #0ecb81; transition: color 0.2s; }
+        .text-down { color: #f6465d; transition: color 0.2s; }
+        .brand-yellow { color: #fcd535; }
+        
+        .flash-up { animation: flashGreen 0.4s ease-out; }
+        .flash-down { animation: flashRed 0.4s ease-out; }
+        @keyframes flashGreen { 0% { background-color: rgba(14, 203, 129, 0.25); } 100% { background-color: transparent; } }
+        @keyframes flashRed { 0% { background-color: rgba(246, 70, 93, 0.25); } 100% { background-color: transparent; } }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #2b3139; }
+        ::-webkit-scrollbar-thumb:hover { background: #474d57; }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="h-14 bg-panel border-b border-panel flex items-center px-4 justify-between shrink-0">
+        <div class="flex items-center gap-6">
+            <div class="font-bold text-xl brand-yellow tracking-wider flex items-center gap-1">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 0L15.352 3.351L12 6.702L8.648 3.351L12 0ZM19.261 7.258L24 12L19.261 16.741L15.91 13.39L18.66 10.64L15.91 7.889L19.261 7.258ZM4.739 7.258L8.09 10.609L5.34 13.36L8.09 16.111L4.739 19.462L0 14.721L4.739 9.98L8.09 6.629L4.739 3.278Z" fill="#FCD535"/><path d="M12 24L8.648 20.649L12 17.298L15.352 20.649L12 24ZM12 8.528L15.472 12L12 15.472L8.528 12L12 8.528Z" fill="#FCD535"/></svg>
+                BINANCE<span class="text-white text-sm font-normal">PRO</span>
+            </div>
+            <div class="flex items-center gap-5 border-l border-panel pl-6">
+                <div>
+                    <h1 class="text-lg font-bold flex items-center gap-2 cursor-pointer hover:text-white">BTC/USDT <span class="text-xs text-gray-500">▼</span></h1>
+                    <a href="#" class="text-xs text-blue-500 hover:underline">Bitcoin</a>
+                </div>
+                <div id="header-price" class="text-xl font-bold text-up mono flash-up px-2 py-0.5 rounded transition-colors">68,420.50</div>
+                <div class="text-xs">
+                    <div class="text-gray-400">24h Change</div>
+                    <div class="text-up mono">+2.45%</div>
+                </div>
+                <div class="text-xs hidden md:block">
+                    <div class="text-gray-400">24h High</div>
+                    <div class="mono">69,100.00</div>
+                </div>
+                <div class="text-xs hidden md:block">
+                    <div class="text-gray-400">24h Low</div>
+                    <div class="mono">66,200.00</div>
+                </div>
+                <div class="text-xs hidden lg:block">
+                    <div class="text-gray-400">24h Vol(BTC)</div>
+                    <div class="mono">34,120.45</div>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <button class="bg-[#2b3139] hover:bg-gray-600 px-4 py-1.5 rounded text-sm font-medium transition">Log In</button>
+            <button class="bg-[#fcd535] hover:bg-[#e6c12d] text-black px-4 py-1.5 rounded text-sm font-medium transition">Register</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="flex flex-1 overflow-hidden">
+        
+        <!-- Left Toolbar (Icons) -->
+        <div class="w-12 bg-panel border-r border-panel flex flex-col items-center py-4 gap-4 shrink-0">
+            <div class="w-8 h-8 rounded hover:bg-[#2b3139] flex items-center justify-center cursor-pointer text-gray-400 hover:text-white" title="Crosshair">⌖</div>
+            <div class="w-8 h-8 rounded hover:bg-[#2b3139] flex items-center justify-center cursor-pointer text-gray-400 hover:text-white" title="Trend Line">📉</div>
+            <div class="w-8 h-8 rounded hover:bg-[#2b3139] flex items-center justify-center cursor-pointer text-gray-400 hover:text-white" title="Fibonacci">𝄘</div>
+            <div class="w-8 h-8 rounded hover:bg-[#2b3139] flex items-center justify-center cursor-pointer text-gray-400 hover:text-white mt-auto" title="Settings">⚙️</div>
+        </div>
+
+        <!-- Chart Area -->
+        <div class="flex-1 flex flex-col min-w-0 bg-[#0b0e11]">
+            <!-- Chart Header -->
+            <div class="h-10 border-b border-panel flex items-center px-3 gap-2 text-sm text-gray-400">
+                <button class="px-2 py-1 hover:text-white transition">Time</button>
+                <div class="w-px h-4 bg-gray-700 mx-1"></div>
+                <button class="px-2 py-1 hover:text-white transition">1m</button>
+                <button class="px-2 py-1 text-[#fcd535] font-semibold border-b-2 border-[#fcd535] transition">5m</button>
+                <button class="px-2 py-1 hover:text-white transition">15m</button>
+                <button class="px-2 py-1 hover:text-white transition">1H</button>
+                <button class="px-2 py-1 hover:text-white transition">4H</button>
+                <button class="px-2 py-1 hover:text-white transition">1D</button>
+                <div class="w-px h-4 bg-gray-700 mx-1"></div>
+                <button class="px-2 py-1 hover:text-white flex items-center gap-1 transition">fx Indicators</button>
+            </div>
+            
+            <!-- The Chart -->
+            <div id="tvchart" class="flex-1 relative w-full h-full">
+                <!-- Live Stats Overlay -->
+                <div class="absolute top-3 left-4 z-10 text-xs flex gap-4 pointer-events-none bg-[#0b0e11]/50 px-2 py-1 rounded">
+                    <div><span class="text-gray-500">O</span> <span id="stat-o" class="mono text-gray-300">68400.00</span></div>
+                    <div><span class="text-gray-500">H</span> <span id="stat-h" class="mono text-gray-300">68450.00</span></div>
+                    <div><span class="text-gray-500">L</span> <span id="stat-l" class="mono text-gray-300">68390.00</span></div>
+                    <div><span class="text-gray-500">C</span> <span id="stat-c" class="mono text-up font-bold">68420.50</span></div>
+                    <div class="ml-2 border-l border-gray-700 pl-2 text-[#fcd535]" id="countdown">04:12</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar: Order Book & Watchlist -->
+        <div class="w-80 bg-panel border-l border-panel flex flex-col shrink-0">
+            <!-- Order Book (Top Half) -->
+            <div class="flex-1 flex flex-col border-b border-panel overflow-hidden">
+                <div class="p-3 font-semibold text-sm border-b border-panel flex justify-between items-center bg-[#1e2329]">
+                    <span>Order Book</span>
+                    <div class="flex gap-2">
+                        <button class="w-4 h-4 bg-gray-600 rounded flex items-center justify-center text-[10px] hover:bg-gray-500">⋮</button>
+                    </div>
+                </div>
+                <div class="flex px-3 py-1.5 text-xs text-gray-500 bg-[#161a1e]">
+                    <div class="flex-1">Price(USDT)</div>
+                    <div class="flex-1 text-right">Amount(BTC)</div>
+                    <div class="flex-1 text-right">Total</div>
+                </div>
+                <!-- Asks (Red) -->
+                <div class="flex flex-col-reverse justify-end flex-1 overflow-hidden px-1 pb-1 gap-[1px]" id="orderbook-asks"></div>
+                
+                <!-- Current Price Display -->
+                <div class="py-2 border-y border-panel flex items-center justify-between px-4 bg-[#161a1e]">
+                    <div class="flex items-center gap-2">
+                        <span id="ob-price" class="text-xl font-bold text-up mono px-1 rounded transition-colors">68,420.50</span>
+                        <span id="ob-arrow" class="text-up text-sm">↑</span>
+                    </div>
+                    <a href="#" class="text-xs text-gray-400 hover:text-white underline">More</a>
+                </div>
+
+                <!-- Bids (Green) -->
+                <div class="flex-1 overflow-hidden px-1 pt-1 gap-[1px] flex flex-col" id="orderbook-bids"></div>
+            </div>
+
+            <!-- Watchlist (Bottom Half) -->
+            <div class="h-64 flex flex-col bg-[#1e2329]">
+                <div class="p-3 font-semibold text-sm border-b border-panel flex justify-between items-center">
+                    <span>Watchlist</span>
+                    <span class="text-gray-400 text-xs hover:text-white cursor-pointer">➕ Add Pair</span>
+                </div>
+                <div class="overflow-y-auto flex-1">
+                    <div class="flex justify-between items-center px-4 py-2 hover:bg-[#2b3139] cursor-pointer transition border-l-2 border-transparent">
+                        <div class="font-medium text-sm">ETH/USDT</div>
+                        <div class="text-right"><div class="mono text-sm text-gray-200">3,520.10</div><div class="text-xs text-down mono">-1.20%</div></div>
+                    </div>
+                    <div class="flex justify-between items-center px-4 py-2 hover:bg-[#2b3139] cursor-pointer transition bg-[#2b3139] border-l-2 border-[#fcd535]">
+                        <div class="font-medium text-sm text-white">BTC/USDT</div>
+                        <div class="text-right"><div class="mono text-sm text-up flash-up font-bold transition-colors" id="wl-btc-price">68,420.50</div><div class="text-xs text-up mono">+2.45%</div></div>
+                    </div>
+                    <div class="flex justify-between items-center px-4 py-2 hover:bg-[#2b3139] cursor-pointer transition border-l-2 border-transparent">
+                        <div class="font-medium text-sm">BNB/USDT</div>
+                        <div class="text-right"><div class="mono text-sm text-gray-200">590.30</div><div class="text-xs text-up mono">+0.85%</div></div>
+                    </div>
+                    <div class="flex justify-between items-center px-4 py-2 hover:bg-[#2b3139] cursor-pointer transition border-l-2 border-transparent">
+                        <div class="font-medium text-sm">SOL/USDT</div>
+                        <div class="text-right"><div class="mono text-sm text-gray-200">145.20</div><div class="text-xs text-up mono">+5.10%</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Formatter function
+        const formatPrice = (val) => new Intl.NumberFormat('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(val);
+        const formatAmount = (val) => new Intl.NumberFormat('en-US', {minimumFractionDigits: 4, maximumFractionDigits: 4}).format(val);
+
+        // Generate dummy orderbook data
+        function generateOrderBookRow(price, amount, type) {
+            const total = (price * amount);
+            const colorClass = type === 'ask' ? 'text-down' : 'text-up';
+            const bgClass = type === 'ask' ? 'bg-down' : 'bg-up';
+            const width = Math.random() * 60 + 5;
+            
+            return `
+                <div class="flex px-2 py-[2px] text-[11px] relative hover:bg-[#2b3139] cursor-pointer group">
+                    <div class="absolute right-0 top-0 bottom-0 ${bgClass} opacity-[0.12] group-hover:opacity-25 transition-all" style="width: ${width}%"></div>
+                    <div class="flex-1 ${colorClass} mono relative z-10">${formatPrice(price)}</div>
+                    <div class="flex-1 text-right text-gray-300 mono relative z-10">${formatAmount(amount)}</div>
+                    <div class="flex-1 text-right text-gray-500 mono relative z-10">${formatPrice(total)}</div>
+                </div>
+            `;
+        }
+
+        const asksDiv = document.getElementById('orderbook-asks');
+        const bidsDiv = document.getElementById('orderbook-bids');
+        
+        let basePrice = 68420.50;
+        
+        for(let i=0; i<15; i++) {
+            asksDiv.innerHTML += generateOrderBookRow(basePrice + (i+1)*5.5, Math.random() * 1.5, 'ask');
+            bidsDiv.innerHTML += generateOrderBookRow(basePrice - (i+1)*5.5, Math.random() * 1.5, 'bid');
+        }
+
+        // Init TradingView Lightweight Chart
+        const chartProperties = {
+            layout: { background: { type: 'solid', color: '#0b0e11' }, textColor: '#848e9c' },
+            grid: { vertLines: { color: '#1e2329' }, horzLines: { color: '#1e2329' } },
+            crosshair: { 
+                mode: LightweightCharts.CrosshairMode.Normal,
+                vertLine: { color: '#474d57', width: 1, style: 1, labelBackgroundColor: '#474d57' },
+                horzLine: { color: '#474d57', width: 1, style: 1, labelBackgroundColor: '#474d57' }
+            },
+            rightPriceScale: { borderColor: '#2b3139' },
+            timeScale: { borderColor: '#2b3139', timeVisible: true, secondsVisible: false }
+        };
+        
+        const domElement = document.getElementById('tvchart');
+        const chart = LightweightCharts.createChart(domElement, chartProperties);
+        const candleSeries = chart.addCandlestickSeries({
+            upColor: '#0ecb81', downColor: '#f6465d', borderVisible: false,
+            wickUpColor: '#0ecb81', wickDownColor: '#f6465d'
+        });
+
+        // Generate some historical data
+        const data = [];
+        let time = Math.floor(Date.now() / 1000) - 100 * 300; // 5m intervals past
+        let currentClose = 68000;
+        for(let i = 0; i < 100; i++) {
+            const open = currentClose;
+            const high = open + Math.random() * 150 + 20;
+            const low = open - Math.random() * 150 - 20;
+            const close = (open + Math.random() * 140 - 70);
+            data.push({ time: time, open, high, low, close });
+            currentClose = close;
+            time += 300;
+        }
+        candleSeries.setData(data);
+
+        // Simulation of Real-time WebSocket Data (Tick by tick)
+        let currentBar = { ...data[data.length - 1] };
+        currentBar.time = Math.floor(Date.now() / 1000); // Start new bar
+        
+        const priceElements = [
+            document.getElementById('header-price'),
+            document.getElementById('ob-price'),
+            document.getElementById('wl-btc-price')
+        ];
+        
+        let secondsLeft = 300; // 5 min countdown
+        setInterval(() => {
+            secondsLeft--;
+            if(secondsLeft <= 0) secondsLeft = 300;
+            const m = Math.floor(secondsLeft / 60).toString().padStart(2, '0');
+            const s = (secondsLeft % 60).toString().padStart(2, '0');
+            document.getElementById('countdown').innerText = `${m}:${s}`;
+        }, 1000);
+
+        setInterval(() => {
+            // Generate a random tick
+            const tick = (Math.random() - 0.5) * 15;
+            const newPrice = currentBar.close + tick;
+            
+            // Update Bar logic
+            currentBar.close = newPrice;
+            if(newPrice > currentBar.high) currentBar.high = newPrice;
+            if(newPrice < currentBar.low) currentBar.low = newPrice;
+            
+            // Re-render chart frame directly (high performance)
+            candleSeries.update(currentBar);
+            
+            // Update Stats Display
+            document.getElementById('stat-o').innerText = formatPrice(currentBar.open);
+            document.getElementById('stat-h').innerText = formatPrice(currentBar.high);
+            document.getElementById('stat-l').innerText = formatPrice(currentBar.low);
+            const statC = document.getElementById('stat-c');
+            statC.innerText = formatPrice(currentBar.close);
+            
+            const isUp = tick >= 0;
+            const colorClass = isUp ? 'text-up' : 'text-down';
+            const flashClass = isUp ? 'flash-up' : 'flash-down';
+            
+            statC.className = `mono font-bold ${colorClass}`;
+            document.getElementById('ob-arrow').innerText = isUp ? '↑' : '↓';
+            document.getElementById('ob-arrow').className = `text-sm ${colorClass}`;
+            
+            // Flash animations on key prices
+            const formattedPrice = formatPrice(newPrice);
+            priceElements.forEach(el => {
+                el.innerText = formattedPrice;
+                // Update text color
+                el.classList.remove('text-up', 'text-down', 'flash-up', 'flash-down');
+                el.classList.add(colorClass);
+                
+                // Trigger reflow for CSS animation
+                void el.offsetWidth; 
+                el.classList.add(flashClass);
+            });
+            
+        }, 400); // 400ms tick latency
+
+        // Make chart responsive
+        new ResizeObserver(entries => {
+            if (entries.length === 0 || entries[0].target !== domElement) { return; }
+            const newRect = entries[0].contentRect;
+            chart.applyOptions({ height: newRect.height, width: newRect.width });
+        }).observe(domElement);
+    </script>
+</body>
+</html>

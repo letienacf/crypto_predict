@@ -38,12 +38,12 @@ export class MarketWsClient {
     this.ws.addEventListener("open", handler);
   }
 
-  connect({ symbols, intervals = [], baseUrl = "ws://localhost:8000/ws/market" }: ConnectParams): void {
+  connect({ symbols, intervals = [], baseUrl = "/ws/market" }: ConnectParams): void {
     if (this.ws !== null) {
       return;
     }
 
-    const url = new URL(baseUrl);
+    const url = new URL(baseUrl, window.location.origin);
     url.searchParams.set("symbols", symbols.map((value) => value.toLowerCase()).join(","));
     url.searchParams.set("intervals", intervals.map((value) => value.toLowerCase()).join(","));
     this.ws = new WebSocket(url.toString());

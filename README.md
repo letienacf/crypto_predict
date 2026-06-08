@@ -37,6 +37,9 @@ Sprint 1 to Sprint 5 baselines completed from specification documents.
 - .github/workflows: CI pipeline.
 
 ## Quick start
+### Deployment guide
+- See `deploy/DEPLOYMENT_GUIDE.md` for the full deploy, verify, and shutdown flow.
+
 ### Backend
 - Run from repository root using your Python environment:
   - uvicorn app.main:app --reload --app-dir backend

@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     )
     redis_url: str = "redis://localhost:6379/0"
     binance_ws_base_url: str = "wss://stream.binance.com:9443"
-    binance_symbols: str = "btcusdt,ethusdt"
+    binance_symbols: str = "btcusdt,ethusdt,btcusdt"
     binance_intervals: str = "1m,5m,15m,1h,4h,1d,1w"
     binance_rest_base_url: str = "https://api.binance.com"
     binance_connection_rotation_seconds: int = Field(default=86100, ge=60)
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     ws_max_intervals_per_session: int = Field(default=7, ge=1, le=20)
     data_saver_batch_size: int = Field(default=100, ge=1, le=5000)
     data_saver_max_batch_size: int = Field(default=5000, ge=100, le=50000)
-    data_saver_flush_seconds: int = Field(default=2, ge=1, le=60)
+    data_saver_flush_seconds: int = Field(default=10, ge=1, le=60)
     max_kline_limit: int = Field(default=1000, ge=1, le=5000)
 
     model_config = SettingsConfigDict(env_prefix="CP_", extra="ignore")

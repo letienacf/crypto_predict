@@ -19,7 +19,7 @@ spec:
           image: ghcr.io/example/crypto-predict-backend:latest
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8000
+            - containerPort: 5556
           env:
             - name: CP_REDIS_URL
               value: redis://redis:6379/0
@@ -40,7 +40,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /readyz
-              port: 8000
+              port: 5556
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 2
@@ -48,7 +48,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 8000
+              port: 5556
             initialDelaySeconds: 10
             periodSeconds: 15
             timeoutSeconds: 2
@@ -56,7 +56,7 @@ spec:
           startupProbe:
             httpGet:
               path: /healthz
-              port: 8000
+              port: 5556
             failureThreshold: 20
             periodSeconds: 3
           securityContext:
@@ -79,5 +79,5 @@ spec:
   ports:
     - name: http
       protocol: TCP
-      port: 8000
-      targetPort: 8000
+      port: 5556
+      targetPort: 5556

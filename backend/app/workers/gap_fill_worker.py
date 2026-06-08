@@ -10,9 +10,11 @@ from pydantic import ValidationError
 
 from app.core.config import settings
 from app.core.logging_config import setup_logging
-from app.observability.metrics import gap_fill_failures_total
-from app.observability.metrics import gap_fill_records_total
-from app.observability.metrics import gap_fill_requests_total
+from app.observability.metrics import (
+    gap_fill_failures_total,
+    gap_fill_records_total,
+    gap_fill_requests_total,
+)
 from app.schemas.events import GapDetectedEvent, KlineClosedEvent
 from app.services.channel_namer import ChannelNamer
 from app.services.redis_event_bus import RedisEventBus
@@ -110,13 +112,33 @@ class GapFillWorker:
 
         url = f"{settings.binance_rest_base_url}/api/v3/klines"
         async with httpx.AsyncClient(timeout=15.0) as client:
-            gap_fill_requests_total.labels(symbol=gap.symbol, interval=gap.interval).inc()
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            payload = response.json()
-            if not isinstance(payload, list):
-                return []
-            return payload
+            last_error: Exception | None = None
+            for attempt in range(3):
+                gap_fill_requests_total.labels(symbol=gap.symbol, interval=gap.interval).inc()
+                try:
+                    response = await client.get(url, params=params)
+                    response.raise_for_status()
+                    payload = response.json()
+                    if not isinstance(payload, list):
+                        return []
+                    return payload
+                except httpx.TimeoutException as error:
+                    last_error = error
+                except httpx.HTTPStatusError as error:
+                    status_code = error.response.status_code
+                    if status_code == 429 or status_code >= 500:
+                        last_error = error
+                    else:
+                        raise
+
+                if attempt == 2:
+                    break
+                await asyncio.sleep(2**attempt)
+
+            if last_error is not None:
+                raise last_error
+
+            return []
 
     async def _save_and_rebroadcast(self, gap: GapDetectedEvent, klines: list[list]) -> None:
         if self._db_pool is None:

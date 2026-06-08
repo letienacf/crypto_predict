@@ -114,7 +114,7 @@ def write_report(report: dict, output_path: Path) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Latency E2E probe for websocket fanout")
-    parser.add_argument("--ws-url", default="ws://localhost:8000/ws/market?symbols=btcusdt&intervals=1m")
+    parser.add_argument("--ws-url", default="ws://localhost:5556/ws/market?symbols=btcusdt&intervals=1m")
     parser.add_argument("--redis-url", default="redis://localhost:6379/0")
     parser.add_argument("--symbol", default="btcusdt")
     parser.add_argument("--interval", default="1m")

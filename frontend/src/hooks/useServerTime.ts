@@ -21,7 +21,7 @@ async function fetchServerOffset(baseUrl: string): Promise<number> {
   return serverMs - Date.now();
 }
 
-export function useServerTime(baseUrl = "http://localhost:8000"): UseServerTimeResult {
+export function useServerTime(baseUrl = ""): UseServerTimeResult {
   const [offsetMs, setOffsetMs] = useState<number>(0);
   const [tick, setTick] = useState<number>(Date.now());
 

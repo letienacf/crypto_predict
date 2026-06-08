@@ -83,7 +83,7 @@ jobs:
 
       - name: Start backend API
         run: |
-          nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 --app-dir . > /tmp/backend.log 2>&1 &
+          nohup uvicorn app.main:app --host 0.0.0.0 --port 5556 --app-dir . > /tmp/backend.log 2>&1 &
           sleep 3
 
       - name: Run latency probe

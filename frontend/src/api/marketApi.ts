@@ -1,6 +1,6 @@
 import type { Interval, KlineResponse } from "../types/market";
 
-const DEFAULT_BASE_URL = "http://localhost:8000";
+const DEFAULT_BASE_URL = "";
 
 export async function fetchHistoricalKlines(
   symbol: string,
