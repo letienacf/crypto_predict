@@ -11,6 +11,8 @@ COPY scripts /app/scripts
 
 RUN pip install --upgrade pip && pip install .
 
+COPY migrations /app/migrations
+
 EXPOSE 5556
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5556"]

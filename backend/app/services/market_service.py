@@ -1,9 +1,12 @@
+import asyncio
+import json
+import logging
 from datetime import UTC, datetime
 from datetime import timedelta
-import logging
 
 import asyncpg
 import httpx
+import redis.asyncio as aioredis
 
 from app.schemas.market import AllowedInterval, KlineItem
 from app.core.config import settings
@@ -15,6 +18,7 @@ class MarketService:
     """Historical market data service with DB-first + Binance REST fallback."""
 
     _db_pool: asyncpg.Pool | None = None
+    _redis_cache: aioredis.Redis | None = None
 
     async def _get_pool(self) -> asyncpg.Pool:
         if MarketService._db_pool is None:
@@ -24,6 +28,110 @@ class MarketService:
                 max_size=10,
             )
         return MarketService._db_pool
+
+    @staticmethod
+    def _cache_key(symbol: str, interval: str) -> str:
+        return f"history:klines:{symbol.lower()}:{interval.lower()}"
+
+    async def _get_redis(self) -> aioredis.Redis:
+        if MarketService._redis_cache is None:
+            MarketService._redis_cache = aioredis.from_url(settings.redis_url, decode_responses=True)
+        return MarketService._redis_cache
+
+    async def _fetch_from_cache(
+        self,
+        symbol: str,
+        interval: AllowedInterval,
+        limit: int,
+    ) -> list[KlineItem]:
+        try:
+            redis_client = await self._get_redis()
+            raw_value = await redis_client.get(self._cache_key(symbol, interval))
+            if not raw_value:
+                return []
+            payload = json.loads(raw_value)
+            if not isinstance(payload, list):
+                return []
+
+            rows: list[KlineItem] = []
+            for item in payload:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    rows.append(KlineItem.model_validate(item))
+                except Exception:
+                    continue
+            return rows if len(rows) <= limit else rows[-limit:]
+        except Exception:
+            return []
+
+    async def _seed_cache(
+        self,
+        symbol: str,
+        interval: AllowedInterval,
+        candles: list[KlineItem],
+    ) -> None:
+        if not candles:
+            return
+
+        try:
+            redis_client = await self._get_redis()
+            await redis_client.set(
+                self._cache_key(symbol, interval),
+                json.dumps([c.model_dump(mode="json") for c in candles], default=str),
+                ex=settings.historical_cache_ttl_seconds or None,
+            )
+        except Exception:
+            logger.warning(
+                "market_service_cache_seed_failed",
+                extra={"symbol": symbol, "interval": interval},
+                exc_info=True,
+            )
+
+    async def _close_cache(self) -> None:
+        if MarketService._redis_cache is not None:
+            await MarketService._redis_cache.aclose()
+            MarketService._redis_cache = None
+
+    async def _prewarm_symbol_interval(
+        self,
+        symbol: str,
+        interval: AllowedInterval,
+    ) -> None:
+        if not symbol or not interval:
+            return
+
+        try:
+            candles = await self._fetch_from_binance(
+                symbol,
+                interval,
+                settings.historical_cache_limit,
+            )
+            if candles:
+                await self._seed_cache(symbol, interval, candles)
+        except Exception:
+            logger.warning(
+                "market_service_prewarm_failed",
+                extra={"symbol": symbol, "interval": interval},
+                exc_info=True,
+            )
+
+    @classmethod
+    async def preload_historical_cache(cls) -> None:
+        if not settings.historical_cache_enabled:
+            return
+
+        service = cls()
+        try:
+            await asyncio.gather(
+                *[
+                    service._prewarm_symbol_interval(symbol, interval)
+                    for symbol in sorted(set(settings.stream_symbols))
+                    for interval in sorted(set(settings.stream_intervals))
+                ]
+            )
+        finally:
+            await service._close_cache()
 
     @staticmethod
     async def _resolve_symbol_id(conn: asyncpg.Connection, symbol: str) -> int:
@@ -184,6 +292,11 @@ class MarketService:
         interval: AllowedInterval,
         limit: int,
     ) -> list[KlineItem]:
+        if settings.historical_cache_enabled:
+            cache_rows = await self._fetch_from_cache(symbol, interval, limit)
+            if cache_rows:
+                return cache_rows
+
         try:
             db_rows = await self._fetch_from_db(symbol, interval, limit)
         except Exception:
@@ -191,6 +304,7 @@ class MarketService:
             db_rows = []
 
         if db_rows:
+            await self._seed_cache(symbol, interval, db_rows)
             return db_rows
 
         try:
@@ -199,13 +313,17 @@ class MarketService:
             logger.warning("market_service_fallback_failed", exc_info=True)
             fallback_rows = []
 
+        if fallback_rows:
+            await self._seed_cache(symbol, interval, fallback_rows)
+
+        if fallback_rows:
+            try:
+                await self._seed_db(symbol, interval, fallback_rows)
+            except Exception:
+                logger.warning("market_service_seed_failed", exc_info=True)
+
         if not fallback_rows:
             return self._build_emergency_mock(symbol, interval, min(limit, settings.max_kline_limit))
-
-        try:
-            await self._seed_db(symbol, interval, fallback_rows)
-        except Exception:
-            logger.warning("market_service_seed_failed", exc_info=True)
 
         return fallback_rows[-min(limit, len(fallback_rows)) :]
 

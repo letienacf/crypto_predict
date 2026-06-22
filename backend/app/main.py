@@ -17,6 +17,7 @@ from app.core.logging_config import setup_logging
 from app.observability.metrics import http_request_duration_seconds
 from app.observability.metrics import http_requests_total
 from app.observability.metrics import render_metrics
+from app.services.market_service import MarketService
 from app.ws.market_gateway import MarketGateway
 
 setup_logging(settings.log_level)
@@ -26,6 +27,14 @@ market_gateway = MarketGateway()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    if settings.historical_cache_enabled:
+        try:
+            await MarketService.preload_historical_cache()
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "historical_cache_prewarm_failed",
+                exc_info=True,
+            )
     await market_gateway.start()
     try:
         yield
