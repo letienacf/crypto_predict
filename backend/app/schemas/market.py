@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 AllowedInterval = Literal["1m", "5m", "15m", "1h", "4h", "1d", "1w"]
 
@@ -21,6 +21,18 @@ class KlineItem(BaseModel):
     low: float
     close: float
     volume: float
+
+    @field_validator("open", "high", "low", "close", "volume", mode="before")
+    @classmethod
+    def validate_price(cls, v: float) -> float:
+        """Validate that prices are valid numbers (not NaN, not infinite)."""
+        if not isinstance(v, (int, float)):
+            raise ValueError(f"Price must be a number, got {type(v)}")
+        if v < 0:
+            raise ValueError(f"Price cannot be negative: {v}")
+        if not (0 <= v <= 1e10):
+            raise ValueError(f"Price out of acceptable range: {v}")
+        return float(v)
 
 
 class KlineResponse(BaseModel):

@@ -11,6 +11,64 @@ interface UseHybridKlinesParams {
   nowMs?: number;
 }
 
+/**
+ * Session cache key for storing klines in sessionStorage.
+ * Data is scoped by symbol and interval.
+ */
+function getSessionCacheKey(symbol: string, interval: Interval): string {
+  return `hybrid_klines:${symbol.toLowerCase()}:${interval}`;
+}
+
+/**
+ * Retrieve cached klines from sessionStorage if available.
+ * Returns null if not found or if cache is invalid.
+ */
+function getSessionCachedKlines(symbol: string, interval: Interval): KlineItem[] | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const cached = sessionStorage.getItem(getSessionCacheKey(symbol, interval));
+    if (!cached) {
+      return null;
+    }
+    const parsed = JSON.parse(cached);
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+    // Validate that items are valid KlineItems
+    return parsed.every(
+      (item: unknown) =>
+        typeof item === "object" &&
+        item !== null &&
+        "timestamp" in item &&
+        "open" in item &&
+        "high" in item &&
+        "low" in item &&
+        "close" in item &&
+        "volume" in item
+    )
+      ? (parsed as KlineItem[])
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Store klines in sessionStorage for quick retrieval when switching intervals.
+ */
+function setSessionCachedKlines(symbol: string, interval: Interval, klines: KlineItem[]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    sessionStorage.setItem(getSessionCacheKey(symbol, interval), JSON.stringify(klines));
+  } catch {
+    // Silently fail if sessionStorage is full or unavailable
+  }
+}
+
 function normalizeCandles(candles: KlineItem[], limit: number): KlineItem[] {
   const byTimestamp = new Map<string, KlineItem>();
   for (const candle of candles) {
@@ -132,14 +190,29 @@ export function useHybridKlines({ symbol, interval, limit = 1000, nowMs }: UseHy
       setError(null);
 
       try {
+        // Check for cached klines first to show data immediately when switching intervals
+        const cachedKlines = getSessionCachedKlines(symbol, interval);
+        if (cachedKlines && cachedKlines.length > 0) {
+          if (!isDisposed) {
+            setKlines(normalizeCandles(cachedKlines, limit));
+          }
+        }
+
+        // Fetch fresh historical klines from backend
         const response = await fetchHistoricalKlines(symbol, interval, limit);
         if (isDisposed) {
           return;
         }
 
-        setKlines(normalizeCandles(response.data, limit));
+        const normalizedKlines = normalizeCandles(response.data, limit);
+        setKlines(normalizedKlines);
+        
+        // Cache the fetched klines in sessionStorage for quick recall when switching intervals
+        setSessionCachedKlines(symbol, interval, normalizedKlines);
 
+        // Connect to WebSocket for real-time updates
         wsClient.connect({ symbols: [symbol], intervals: [interval] });
+        
         unsubscribeKlineRef.current = wsClient.subscribe({
           symbol,
           interval,
@@ -153,7 +226,10 @@ export function useHybridKlines({ symbol, interval, limit = 1000, nowMs }: UseHy
                 close: incoming.close,
                 volume: incoming.volume,
               };
-              return upsertCandle(current, normalizedIncoming, limit);
+              const updated = upsertCandle(current, normalizedIncoming, limit);
+              // Update cache with latest data
+              setSessionCachedKlines(symbol, interval, updated);
+              return updated;
             });
           },
         });
@@ -179,6 +255,8 @@ export function useHybridKlines({ symbol, interval, limit = 1000, nowMs }: UseHy
               }
 
               const currentCloseMs = getCandleCloseTimeMs(tradeTimeMs, intervalMs);
+              let updated: KlineItem[];
+              
               if (currentCloseMs <= lastCloseMs) {
                 const updatedLast: KlineItem = {
                   ...last,
@@ -187,19 +265,22 @@ export function useHybridKlines({ symbol, interval, limit = 1000, nowMs }: UseHy
                   close: tick.price,
                   volume: last.volume + tick.quantity,
                 };
-                return upsertCandle(next.slice(0, -1), updatedLast, limit);
+                updated = upsertCandle(next.slice(0, -1), updatedLast, limit);
+              } else {
+                const newCandle: KlineItem = {
+                  timestamp: new Date(Math.floor(currentCloseMs / 1000) * 1000).toISOString(),
+                  open: last.close,
+                  high: Math.max(last.close, tick.price),
+                  low: Math.min(last.close, tick.price),
+                  close: tick.price,
+                  volume: tick.quantity,
+                };
+                updated = upsertCandle(next, newCandle, limit);
               }
-
-              const newCandle: KlineItem = {
-                timestamp: new Date(Math.floor(currentCloseMs / 1000) * 1000).toISOString(),
-                open: last.close,
-                high: Math.max(last.close, tick.price),
-                low: Math.min(last.close, tick.price),
-                close: tick.price,
-                volume: tick.quantity,
-              };
-
-              return upsertCandle(next, newCandle, limit);
+              
+              // Update cache with real-time tick updates
+              setSessionCachedKlines(symbol, interval, updated);
+              return updated;
             });
           },
         });

@@ -194,17 +194,35 @@ class MarketService:
 
         # UI requires ascending timeline for chart setData.
         rows = list(reversed(rows))
-        return [
-            KlineItem(
-                timestamp=row["timestamp"],
-                open=float(row["open"]),
-                high=float(row["high"]),
-                low=float(row["low"]),
-                close=float(row["close"]),
-                volume=float(row["volume"]),
+        
+        valid_klines: list[KlineItem] = []
+        invalid_count = 0
+        for row in rows:
+            try:
+                kline = KlineItem(
+                    timestamp=row["timestamp"],
+                    open=float(row["open"]),
+                    high=float(row["high"]),
+                    low=float(row["low"]),
+                    close=float(row["close"]),
+                    volume=float(row["volume"]),
+                )
+                valid_klines.append(kline)
+            except (ValueError, TypeError) as e:
+                logger.warning(
+                    "db_invalid_kline_parse",
+                    extra={"symbol": symbol, "interval": interval, "row": row, "error": str(e)},
+                    exc_info=True,
+                )
+                invalid_count += 1
+        
+        if invalid_count > 0:
+            logger.info(
+                "db_filtered_invalid_klines",
+                extra={"symbol": symbol, "interval": interval, "invalid_count": invalid_count},
             )
-            for row in rows
-        ]
+        
+        return valid_klines
 
     async def _fetch_from_binance(self, symbol: str, interval: AllowedInterval, limit: int) -> list[KlineItem]:
         capped_limit = min(limit, settings.max_kline_limit)
@@ -223,12 +241,13 @@ class MarketService:
             return []
 
         rows: list[KlineItem] = []
+        invalid_count = 0
         for item in payload:
             if not isinstance(item, list) or len(item) < 7:
                 continue
-            close_time_ms = int(item[6])
-            rows.append(
-                KlineItem(
+            try:
+                close_time_ms = int(item[6])
+                kline = KlineItem(
                     timestamp=datetime.fromtimestamp(close_time_ms / 1000.0, tz=UTC),
                     open=float(item[1]),
                     high=float(item[2]),
@@ -236,7 +255,30 @@ class MarketService:
                     close=float(item[4]),
                     volume=float(item[5]),
                 )
+                # Additional validation: high >= low, high >= open, high >= close, low <= open, low <= close
+                if kline.high < kline.low:
+                    logger.warning(
+                        "binance_invalid_kline_high_low",
+                        extra={"symbol": symbol, "interval": interval, "kline": kline},
+                    )
+                    invalid_count += 1
+                    continue
+                rows.append(kline)
+            except (ValueError, TypeError) as e:
+                logger.warning(
+                    "binance_invalid_kline_parse",
+                    extra={"symbol": symbol, "interval": interval, "item": item, "error": str(e)},
+                    exc_info=True,
+                )
+                invalid_count += 1
+                continue
+        
+        if invalid_count > 0:
+            logger.info(
+                "binance_filtered_invalid_klines",
+                extra={"symbol": symbol, "interval": interval, "invalid_count": invalid_count},
             )
+        
         return rows
 
     async def _seed_db(self, symbol: str, interval: AllowedInterval, candles: list[KlineItem]) -> None:
